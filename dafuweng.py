@@ -3,15 +3,16 @@
 # author: Shu Jiang
 # time  : 2020/3/13
 # 大富翁模拟局
+# 待加入：CP检测
 
-import random
+import random, math
 
 # 棋盘格
 border_num = 36
 
 # 玩家
 player_nums = 4
-play_turns = 20
+play_turns = 50
 
 
 # 金钱相关
@@ -65,6 +66,31 @@ assest_ownship_list = [
 -2, -2, -1, -1, -1, -1, -1
 ]
 
+# CP/组合检测
+combo_list = [
+[1,2,3],[5,6],[8,9],
+[12,13],[16,17],
+[19,20,21],[24,25],[27,28],
+[31,32],[34,35]
+]
+
+# CP增益
+cp_plus_per = 15
+combo_plus_per = 30
+
+'''
+检查该格是否是CP/组合，并返回增益百分比
+'''
+def combo_check(pos, owner):
+    # print(assest_ownship_list[pos])
+    for combo in  combo_list:
+        if pos in combo:
+            for p in combo:
+                if not assest_ownship_list[p] == owner:
+                    return 0
+            if len(combo) == 2: return cp_plus_per
+            elif len(combo) == 3: return combo_plus_per
+    return 0
 
 '''
 投掷骰子
@@ -99,6 +125,8 @@ def play_game(player_nums, play_turns, border_num):
     pre_pos = 0
     for j in range(play_turns):
         for i in range(player_nums):
+            
+            
             roll = roll_dice()      # 投掷骰子
             # print((i,j,roll))
             step_sum[i] += roll
@@ -111,11 +139,11 @@ def play_game(player_nums, play_turns, border_num):
             pos_record[i].append(pos)
             pos_stat[i][pos] += 1 # 获取点数存储到对应次数位置
             
+            
             # 经过起点 +2000
             if pre_pos > pos :
-                print('Player %d: go past the start and get bonus $%d.'%(i,start_bonus))
-                money_now[i]+=start_bonus
-            
+                print('START: Player %d: go past the start and get bonus $%d.'%(i,start_bonus))
+                money_now[i]+=start_bonus  
             
             # 购买土地
             if assest_ownship_list[pos] == -1:
@@ -123,11 +151,11 @@ def play_game(player_nums, play_turns, border_num):
                 if assets_type == 14: # 特殊产业
                     special_num[i] += 1
                     cost = special_fee_list[0]
-                    print('Player %d: buy SPECIAL assert at %d and cost $%d.'%(i,pos,cost))
+                    print('BUY: Player %d: buy SPECIAL assert at %d and cost $%d; now have %d SPECIAL.'%(i,pos,cost,special_num[i]))
                 else:
                     cost = assets_list[assets_type][0]
                     assest_level_list[pos] = 0
-                    print('Player %d: buy assert at %d and cost $%d.'%(i,pos,cost))
+                    print('Player %d: buy assert at %d (type %d) and cost $%d.'%(i,pos,assets_type,cost))
                 assest_ownship_list[pos] = i
                 money_now[i] -= cost
                 
@@ -139,7 +167,7 @@ def play_game(player_nums, play_turns, border_num):
                     cost = assets_list[assets_type][1]
                     assest_level_list[pos] += 1
                     money_now[i] -= cost
-                    print('Player %d: update assert at %d from level %d to level %d and cost $%d.'%(i,pos,level,level+1,cost))
+                    print('UP: Player %d: update assert at %d (type %d) from level %d to level %d and cost $%d.'%(i,pos,assets_type,level,level+1,cost))
 
             # 走到别人的产业 
             elif assest_ownship_list[pos] > -1:
@@ -149,15 +177,28 @@ def play_game(player_nums, play_turns, border_num):
                 if assets_type == 14: # 特殊产业
                     num = special_num[owner]
                     fee = special_fee_list[num]
-                    print('Player %d: stay at %d (SPECIAL) and pay $%d to Player %d.'%(i,pos,fee,owner))
-                else:
+                    print('PAY: Player %d: stay at %d (SPECIAL) and pay $%d to Player %d who has %d SPECIAL.'%(i,pos,fee,owner,special_num[owner]))
+                else: #正常产业
                     fee = assets_list[assets_type][level+2]
-                    print('Player %d: stay at %d (level %d) and pay $%d to Player %d.'%(i,pos,level,fee,owner))
+                    fee_plus = math.ceil(1.0*fee*combo_check(pos,owner)/1000)*10
+                    if fee_plus>0: 
+                        # CP/组合增益
+                        print('COMBO: Player %d: stay at %d (type %d, level %d)) and pay $%d ($%d + $%d) to Player %d.'%(i,pos,assets_type,level,fee+fee_plus, fee,fee_plus, owner))
+                    else:
+                        print('PAY: Player %d: stay at %d (type %d, level %d)) and pay $%d to Player %d.'%(i,pos,assets_type,level,fee,owner))
+                    
                 money_now[i] -= fee
                 money_now[owner] += fee
             
             money_record[i].append(money_now[i])
-
+            
+            print('====STATUS====')
+            print('Player %d:' % i)
+            print('roll %d:' % roll)
+            print('circle: %d' % circle)
+            print('position: %d' % pos)
+            print('money: %d' % money_now[i])
+            print('==============')
             
     # print(roll_record)
     # print(step_record)
@@ -178,9 +219,60 @@ def play_game(player_nums, play_turns, border_num):
         print('money: %d' % money_now[i])
         
         
+def border_record(player_nums, border_num):
+    ### 有地图保存
+    step_sum = []        # 每位玩家的步数和
+    roll_record = []     # 每位玩家的投掷记录
+    step_record = []     # 每位玩家的步数和记录
+    cost_record = []     # 每位玩家的花费记录
+    circle_record = []   # 每位玩家的圈数记录
+    pos_record = []      # 每位玩家的位置记录
+    pos_stat = []        # 棋盘上各点的位置统计
+    money_record = []    # 每位玩家的当前资金记录
+    money_now = []       # 每位玩家的当前资金
+    
+    for i in range(player_nums): # 数组初始化
+        step_sum.append(0) 
+        money_now.append(start_money) 
+        roll_record.append([])
+        step_record.append([])
+        cost_record.append([])
+        circle_record.append([])
+        pos_record.append([])
+        pos_stat.append([0]* border_num)
+        money_record.append([])
+        
+    pre_pos = 0
+    for j in range(play_turns):
+        print('Turn No. %d:' % j)
+        print('============')
+        for i in range(player_nums):
+            # roll = roll_dice()      # 投掷骰子
+            roll = int(raw_input('Player %d roll the dice:'%i))%6 or 6
+            # print((i,j,roll))
+            step_sum[i] += roll
+            roll_record[i].append(roll)
+            step_record[i].append(step_sum[i])
+            circle = step_sum[i]/border_num
+            pos = step_sum[i]%border_num
+            if j>0: pre_pos = pos_record[i][-1]
+            circle_record[i].append(circle)
+            pos_record[i].append(pos)
+            pos_stat[i][pos] += 1 # 获取点数存储到对应次数位置
+
+            print('Player %d:' % i)
+            print('circle: %d' % circle)
+            print('position: %d' % pos)
+            print('============')
+            
+
 
 
 if __name__ == '__main__':
     play_game(player_nums, play_turns, border_num)
+    # border_record(player_nums, border_num)
+    
+    
+    
 
 
